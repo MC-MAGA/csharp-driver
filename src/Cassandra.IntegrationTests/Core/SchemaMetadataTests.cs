@@ -30,13 +30,20 @@ namespace Cassandra.IntegrationTests.Core
     [TestFixture, Category(TestCategory.Short), Category(TestCategory.RealCluster), Category(TestCategory.ServerApi)]
     public class SchemaMetadataTests : SharedClusterTest
     {
-        public SchemaMetadataTests() : 
-            base(1, true, new TestClusterOptions
+        public SchemaMetadataTests() :
+            base(() =>
             {
-                CassandraYaml = 
-                    TestClusterManager.CheckCassandraVersion(true, new Version(4, 0), Comparison.GreaterThanOrEqualsTo ) 
-                        ? new[] { "enable_materialized_views: true" } : new string[0]
-            })
+                string[] cassandraYaml = null;
+                if (TestClusterManager.CheckCassandraVersion(true, new Version(4, 0), Comparison.GreaterThanOrEqualsTo) ||
+                    TestClusterManager.IsHcd)
+                {
+                    cassandraYaml = new[] { "enable_materialized_views: true" };
+                }
+                return new TestClusterOptions
+                {
+                    CassandraYaml = cassandraYaml
+                };
+            }, 1, true)
         {
         }
 
@@ -654,11 +661,13 @@ namespace Cassandra.IntegrationTests.Core
         [Test, TestCase(true), TestCase(false), TestCassandraVersion(3, 0)]
         public void ColumnClusteringOrderReversedTest(bool metadataSync)
         {
-            if (TestClusterManager.CheckCassandraVersion(false, new Version(4, 0), Comparison.GreaterThanOrEqualsTo))
+            if (TestClusterManager.CheckCassandraVersion(true, new Version(4, 0), Comparison.GreaterThanOrEqualsTo) || 
+                (TestClusterManager.IsDse && TestClusterManager.CheckDseVersion(new Version(6, 0), Comparison.GreaterThanOrEqualsTo)))
             {
-                Assert.Ignore("Compact table test designed for C* 3.0");
+                Assert.Ignore("COMPACT STORAGE is not supported by DSE 6.0 / C* 4.0");
                 return;
             }
+
             var keyspaceName = TestUtils.GetUniqueKeyspaceName();
             var tableName = TestUtils.GetUniqueTableName().ToLower();
             var cluster = GetNewTemporaryCluster(builder => builder.WithMetadataSyncOptions(new MetadataSyncOptions().SetMetadataSyncEnabled(metadataSync)));
